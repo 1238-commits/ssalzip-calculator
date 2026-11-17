@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#176b55">
+<meta name="description" content="빠르고 편리한 쌀집 계산기">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<title>쌀집 계산기</title>
+<style>
+:root{color-scheme:light dark;--bg:#f2f5f3;--panel:#fff;--ink:#17231e;--muted:#728078;--line:#dce5df;--green:#176b55;--soft:#e2f1eb;--orange:#f0a64b}
+@media(prefers-color-scheme:dark){:root{--bg:#101714;--panel:#1b2620;--ink:#eff7f1;--muted:#a5b5aa;--line:#34443a;--green:#6ac6a1;--soft:#263d32;--orange:#c58a3f}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Noto Sans KR",sans-serif;min-height:100dvh;display:flex;justify-content:center}
+main{width:min(100%,460px);padding:18px 16px calc(24px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:14px}
+header{display:flex;align-items:center;justify-content:space-between;padding:5px 2px}
+h1{font-size:21px;margin:0;font-weight:800}.sub{font-size:12px;color:var(--muted);margin-top:3px}
+.pill{font-size:11px;color:var(--green);background:var(--soft);padding:6px 10px;border-radius:20px;font-weight:700}
+.display{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:16px 18px;text-align:right;box-shadow:0 4px 18px #00000008}
+#history{min-height:20px;color:var(--muted);font-size:13px;overflow-wrap:anywhere}
+#screen{font-size:clamp(34px,10vw,48px);font-weight:650;letter-spacing:-1px;min-height:62px;display:flex;align-items:center;justify-content:flex-end;overflow-wrap:anywhere;word-break:break-all}
+.mem{font-size:12px;color:var(--muted)}
+.keys{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}
+button{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:15px;min-height:66px;font-size:21px;font-weight:650;box-shadow:0 2px 4px #00000008;touch-action:manipulation}
+button:active{transform:scale(.97);filter:brightness(.94)}
+button.fn{font-size:14px;background:var(--soft);color:var(--green);border-color:transparent}
+button.op{background:var(--soft);color:var(--green);border-color:transparent;font-size:24px}
+button.eq{background:var(--green);color:white;border-color:var(--green)}
+button.wide{grid-column:span 2}
+.note{font-size:11px;line-height:1.6;color:var(--muted);text-align:center}
+#toast{font-size:12px;color:var(--muted);text-align:center;min-height:18px}
+</style>
+</head>
+<body>
+<main>
+<header><div><h1>쌀집 계산기</h1><div class="sub">빠르고 간편한 실무 계산</div></div><span class="pill">오프라인 사용 가능</span></header>
+<section class="display" aria-live="polite"><div id="history">계산을 시작하세요</div><div id="screen">0</div><div class="mem">메모리 <span id="memory">0</span></div></section>
+<section class="keys" aria-label="계산기">
+<button class="fn" data-a="MC">MC</button><button class="fn" data-a="MR">MR</button><button class="fn" data-a="M+">M+</button><button class="fn" data-a="M-">M-</button>
+<button class="fn" data-a="GT">GT</button><button class="fn" data-a="MU">MU</button><button class="fn" data-a="BS">⌫</button><button class="fn" data-a="AC">AC</button>
+<button data-n="7">7</button><button data-n="8">8</button><button data-n="9">9</button><button class="op" data-a="÷">÷</button>
+<button data-n="4">4</button><button data-n="5">5</button><button data-n="6">6</button><button class="op" data-a="×">×</button>
+<button data-n="1">1</button><button data-n="2">2</button><button data-n="3">3</button><button class="op" data-a="-">−</button>
+<button data-a="SIGN">±</button><button data-n="0">0</button><button data-a=".">.</button><button class="op" data-a="+">+</button>
+<button class="fn" data-a="%">%</button><button class="fn" data-a="C">C</button><button class="eq wide" data-a="=">=</button>
+</section>
+<div id="toast">MU: 원가와 마진율을 이용한 판매가 계산</div>
+<div class="note">M+/M−: 메모리 누적 · MR: 메모리 불러오기 · GT: 계산 결과 누적합계<br>계산 결과는 화면을 닫아도 저장되지 않습니다.</div>
+</main>
+<script>
+(()=>{
+let cur='0',stored=null,op=null,fresh=false,mem=0,gt=0,lastOp=null,lastVal=null;
+const $=id=>document.getElementById(id),fmt=n=>Number.isFinite(n)?String(Number(n.toPrecision(12))):'오류',v=()=>Number(cur);
+function show(){$('screen').textContent=cur;$('memory').textContent=fmt(mem)}
+function msg(s){$('toast').textContent=s}
+function calc(a,b,o){return o==='+'?a+b:o==='-'?a-b:o==='×'?a*b:o==='÷'?(b===0?NaN:a/b):b}
+function digit(n){if(fresh){cur='0';fresh=false}if(n==='.') {if(!cur.includes('.'))cur+='.'}else cur=cur==='0'?n:cur.length<15?cur+n:cur;show()}
+function act(a){
+msg('');
+if(a==='AC'){cur='0';stored=null;op=null;fresh=false;lastOp=null;lastVal=null;gt=0;$('history').textContent='계산을 시작하세요';show();return}
+if(a==='C'){cur='0';show();return}
+if(a==='BS'){cur=fresh?'0':cur.length>1?cur.slice(0,-1):'0';fresh=false;show();return}
+if(a==='SIGN'){cur=fmt(-v());show();return}
+if(a==='%'){cur=fmt(v()/100);show();return}
+if(a==='MC'){mem=0;show();return}if(a==='MR'){cur=fmt(mem);fresh=true;show();return}
+if(a==='M+'){mem+=v();show();return}if(a==='M-'){mem-=v();show();return}
+if(a==='GT'){cur=fmt(gt);fresh=true;show();return}
+if(a==='MU'){if(stored!==null&&op){let rate=v()/100;if(rate>=1){msg('마진율은 100% 미만으로 입력하세요.');return}let result=op==='+'?stored/(1-rate):op==='-'?stored/(1+rate):stored*(1+rate);$('history').textContent='MU 판매가 계산';cur=fmt(result);fresh=true;stored=null;op=null;show()}else msg('기준금액 입력 → + → 마진율(%) 입력 → MU');return}
+if(['+','-','×','÷'].includes(a)){if(op&&!fresh){let r=calc(stored,v(),op);if(!Number.isFinite(r)){msg('0으로 나눌 수 없습니다.');return}cur=fmt(r)}stored=v();op=a;$('history').textContent=fmt(stored)+' '+a;fresh=true;show();return}
+if(a==='='){if(op&&stored!==null){let b=v(),r=calc(stored,b,op);$('history').textContent=fmt(stored)+' '+op+' '+fmt(b)+' =';if(!Number.isFinite(r)){msg('0으로 나눌 수 없습니다.');return}cur=fmt(r);gt+=r;lastOp=op;lastVal=b;stored=null;op=null;fresh=true;show()}else if(lastOp){let r=calc(v(),lastVal,lastOp);if(Number.isFinite(r)){cur=fmt(r);gt+=r;fresh=true;show()}}}
+}
+document.querySelector('.keys').addEventListener('click',e=>{let b=e.target.closest('button');if(!b)return;if(b.dataset.n!==undefined)digit(b.dataset.n);else act(b.dataset.a)});
+document.addEventListener('keydown',e=>{if(/^[0-9.]$/.test(e.key))digit(e.key);else if(e.key==='Enter'||e.key==='=')act('=');else if(e.key==='Backspace')act('BS');else if(e.key==='Escape')act('AC');else if(e.key==='+')act('+');else if(e.key==='-')act('-');else if(e.key==='*')act('×');else if(e.key==='/'){e.preventDefault();act('÷')}});
+show();
+})();
+if('serviceWorker' in navigator && location.protocol!=='file:')navigator.serviceWorker.register('./sw.js').catch(()=>{});
+</script>
+</body></html>
